@@ -56,6 +56,26 @@ async fn main() {
         .route("/trainer/clients", post(handlers::trainer::create_client))
         .route("/trainer/clients", get(handlers::trainer::list_clients))
         .route(
+            "/trainer/clients/:id",
+            get(handlers::trainer::get_client_by_id),
+        )
+        .route(
+            "/trainer/clients/:id",
+            axum::routing::put(handlers::trainer::update_client),
+        )
+        .route(
+            "/trainer/clients/:id",
+            axum::routing::delete(handlers::trainer::delete_client),
+        )
+        .route(
+            "/trainer/sessions/:client_id",
+            get(handlers::trainer::get_client_sessions),
+        )
+        .route(
+            "/trainer/sessions/:client_id",
+            post(handlers::trainer::log_workout_session),
+        )
+        .route(
             "/trainer/sessions/:id/feedback",
             post(handlers::trainer::add_session_feedback),
         )
@@ -76,7 +96,13 @@ async fn main() {
                 .parse::<axum::http::HeaderValue>()
                 .unwrap(),
         )
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         // This is crucial: the browser must be allowed to send the Authorization header
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]);
     // Now merging will work perfectly because the types match

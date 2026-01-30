@@ -9,7 +9,7 @@ api.interceptors.request.use(async (config) => {
     try {
         await keycloak.updateToken(30);
     } catch (error) {
-        console.error("Token refresh failed", error);
+        console.error("Failed to refresh token", error);
         keycloak.login();
     }
     if (keycloak.token) { 
@@ -28,13 +28,8 @@ export const getClientById = async (id: string) => {
     return response.data;
 };
 
-export const createClient = async (data: { name: string; goal: string; profile: string }) => {
-    const response = await api.post('/trainer/clients', data);
-    return response.data;
-};
-
-export const updateClient = async (id: string, data: { name: string; goal: string; profile: string }) => {
-    const response = await api.put(`/trainer/clients/${id}`, data);
+export const createClient = async (clientData: { name: string; goal: string; profile: string }) => {
+    const response = await api.post('/trainer/clients', clientData);
     return response.data;
 };
 
