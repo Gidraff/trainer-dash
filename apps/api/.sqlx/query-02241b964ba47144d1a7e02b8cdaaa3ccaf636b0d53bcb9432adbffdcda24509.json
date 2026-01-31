@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE sessions SET trainer_feedback = $1, performance_rating = $2 \n         WHERE id = $3 AND client_id IN (SELECT id FROM clients WHERE trainer_id = $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02241b964ba47144d1a7e02b8cdaaa3ccaf636b0d53bcb9432adbffdcda24509"
+}

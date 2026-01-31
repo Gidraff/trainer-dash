@@ -13,7 +13,6 @@ mod db;
 mod handlers;
 mod models;
 
-// 1. Define a unified AppState to resolve the type mismatch
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
@@ -24,17 +23,44 @@ pub struct AppState {
 async fn main() {
     dotenvy::dotenv().ok();
 
+    // 1. Database Setup
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool: PgPool = db::create_pool(&database_url).await;
 
+    // Run migrations (this will only work if the API compiles!)
     sqlx::migrate!()
         .run(&pool)
         .await
         .expect("Failed to run database migrations");
 
-    // Fetch JWKS for the AuthState
+    // 2. Keycloak Setup (Local Configuration)
+    // We use 8081 because the API is running on your host machine
     let jwks_url = "http://localhost:8081/realms/trainer-app/protocol/openid-connect/certs";
-    let jwks: auth::jwks::Jwks = reqwest::get(jwks_url).await.unwrap().json().await.unwrap();
+
+    println!("🔐 Fetching JWKS from: {}", jwks_url);
+
+    // Fetch the response safely to debug HTML errors
+    let response = reqwest::get(jwks_url)
+        .await
+        .expect("CRITICAL: Failed to connect to Keycloak. Is Docker running?");
+
+    let body_text = response
+        .text()
+        .await
+        .expect("Failed to read Keycloak response body");
+
+    // Check if we got HTML instead of JSON (common when the Realm name is wrong)
+    if body_text.contains("<html>") || body_text.contains("Page not found") {
+        println!("\n--- ERROR: KEYCLOAK RETURNED HTML ---");
+        println!("{}", body_text);
+        println!("--------------------------------------\n");
+        panic!(
+            "Keycloak returned HTML. Check if realm 'trainer-app' exists at http://localhost:8081"
+        );
+    }
+
+    let jwks: auth::jwks::Jwks = serde_json::from_str(&body_text)
+        .expect("Failed to parse JWKS JSON. See the response body above.");
 
     let auth_config = auth::middleware::AuthState {
         jwks: Arc::new(jwks),
@@ -42,12 +68,12 @@ async fn main() {
         audience: "trainer-api".into(),
     };
 
-    // 2. Initialize the unified state
     let state = AppState {
         db: pool.clone(),
         auth: auth_config.clone(),
     };
 
+    // 3. Routes
     let protected_routes: Router<AppState> = Router::new()
         .route(
             "/trainer/secure",
@@ -84,13 +110,12 @@ async fn main() {
             auth::middleware::auth_middleware,
         ));
 
-    // Initialize public routes with the SAME type
     let public_routes: Router<AppState> = Router::new()
-        .route("/", get(|| async { "Hello, world!" }))
+        .route("/", get(|| async { "FitFlow AI API - v1.0" }))
         .route("/health", get(|| async { "OK" }));
 
+    // 4. CORS
     let cors = CorsLayer::new()
-        // Explicitly allow the Vite dev server
         .allow_origin(
             "http://localhost:5173"
                 .parse::<axum::http::HeaderValue>()
@@ -103,20 +128,23 @@ async fn main() {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        // This is crucial: the browser must be allowed to send the Authorization header
-        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]);
-    // Now merging will work perfectly because the types match
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
+        .allow_credentials(true);
+
     let app = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .layer(cors)
         .with_state(state);
 
+    // 5. Server Start
     let addr = "0.0.0.0:8080";
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    println!("🚀 Server started successfully on {}", addr);
 
-    // Now into_make_service() will be available because Router state is ()
+    println!("\n🚀 FitFlow API running locally on http://localhost:8080");
+    println!("📡 Connecting to Docker Keycloak on http://localhost:8081");
+    println!("🗄️  Connecting to Docker Postgres on localhost:5432\n");
+
     axum::serve(listener, app.into_make_service())
         .await
         .unwrap();

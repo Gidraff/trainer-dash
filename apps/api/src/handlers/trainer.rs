@@ -78,7 +78,9 @@ pub async fn delete_client(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    if result.rows_affected() == 0 { return Err(StatusCode::NOT_FOUND); }
+    if result.rows_affected() == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -142,7 +144,7 @@ pub async fn get_client_sessions(
 pub async fn log_workout_session(
     State(state): State<AppState>,
     Extension(_claims): Extension<Claims>,
-    Json(payload): Json<serde_json::Value>, 
+    Json(payload): Json<serde_json::Value>,
 ) -> Result<StatusCode, StatusCode> {
     sqlx::query(
         "INSERT INTO sessions (client_id, workout_id, date, weight, mood, energy_level, athlete_rating, athlete_notes) 
@@ -180,6 +182,8 @@ pub async fn add_session_feedback(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    if result.rows_affected() == 0 { return Err(StatusCode::NOT_FOUND); }
+    if result.rows_affected() == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
     Ok(StatusCode::OK)
 }

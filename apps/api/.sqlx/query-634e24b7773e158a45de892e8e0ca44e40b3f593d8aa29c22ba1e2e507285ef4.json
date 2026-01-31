@@ -1,0 +1,89 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            id, \n            client_id as \"client_id!\", \n            workout_id as \"workout_id?\", \n            date, \n            weight as \"weight: Decimal\", \n            mood as \"mood?\", \n            energy_level as \"energy_level?\", \n            athlete_rating as \"athlete_rating?\", \n            athlete_notes as \"athlete_notes?\", \n            trainer_feedback as \"trainer_feedback?\", \n            performance_rating as \"performance_rating?\", \n            created_at as \"created_at?\"\n        FROM sessions \n        WHERE client_id = $1 \n          AND client_id IN (SELECT id FROM clients WHERE trainer_id = $2)\n        ORDER BY date DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "client_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "workout_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "weight: Decimal",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "mood?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "energy_level?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "athlete_rating?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "athlete_notes?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "trainer_feedback?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "performance_rating?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "634e24b7773e158a45de892e8e0ca44e40b3f593d8aa29c22ba1e2e507285ef4"
+}

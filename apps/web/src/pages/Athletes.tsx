@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Plus, Edit3, Trash2, Target, Users } from 'lucide-react';
 import { getClients, deleteClient } from '../api';

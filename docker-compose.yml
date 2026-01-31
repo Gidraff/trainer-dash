@@ -2,47 +2,70 @@ version: "3.9"
 
 services:
   db:
-    image: postgres:16
-    container_name: trainer-db
+    image: postgres:16-alpine
+    container_name: fitflow-db
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: trainer
-      POSTGRES_PASSWORD: trainer
-      POSTGRES_DB: trainerdb
+      POSTGRES_USER: ${API_DB_USER}
+      POSTGRES_PASSWORD: ${API_DB_PASSWORD}
+      POSTGRES_DB: ${API_DB_NAME}
+      KC_DB_NAME: ${KC_DB_NAME} # Passed to the init script
     ports:
       - "5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    networks:
+      - fitflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${API_DB_USER} -d ${API_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
-    command: start-dev
+    container_name: fitflow-keycloak
+    command: start-dev --proxy edge
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/${KC_DB_NAME}
+      KC_DB_USERNAME: ${API_DB_USER}
+      KC_DB_PASSWORD: ${API_DB_PASSWORD}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY: edge
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+
     ports:
       - "8081:8080"
+    networks:
+      - fitflow-network
+    depends_on:
+      db:
+        condition: service_healthy
 
   # api:
   #   build:
   #     context: ./apps/api
   #     dockerfile: Dockerfile
-  #   container_name: trainer-api
-  #   env_file:
-  #     - ./apps/api/.env
+  #   container_name: fitflow-api
+  #   environment:
+  #     DATABASE_URL: postgresql://${API_DB_USER}:${API_DB_PASSWORD}@db:5432/${API_DB_NAME}
+  #     KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/fitflow/protocol/openid-connect/certs
+  #   networks:
+  #     - fitflow-network
   #   depends_on:
-  #     - db
-  #   ports:
-  #     - "8080:8080"
-
-  # web:
-  #   build:
-  #     context: ./apps/web
-  #     dockerfile: Dockerfile
-  #   container_name: trainer-web
-  #   depends_on:
-  #     - api
-  #   ports:
-  #     - "5173:80"
+  #     db:
+  #       condition: service_healthy
+  #     keycloak:
+  #       condition: service_started
 
 volumes:
   db-data:
+
+networks:
+  fitflow-network:
+    driver: bridge

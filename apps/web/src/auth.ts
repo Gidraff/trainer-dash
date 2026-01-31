@@ -2,7 +2,7 @@ import Keycloak from "keycloak-js";
 
 
 const keycloak = new Keycloak({
-    url: 'http://localhost:8081/',
+    url: 'http://localhost:8081',
     realm: 'trainer-app',
     clientId: 'trainer-api',
 });
@@ -10,7 +10,8 @@ const keycloak = new Keycloak({
 export const initKeycloak = (onAuthenticated: () => void) => {
     keycloak.init({ 
         onLoad: 'login-required', 
-        checkLoginIframe: false 
+        checkLoginIframe: false,
+        // redirectUri: 'https://localhost/' 
     }).then((authenticated) => {
         if (authenticated) {
             onAuthenticated();

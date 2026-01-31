@@ -1,50 +1,96 @@
-import axios from 'axios';
-import keycloak from './auth';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { Calendar, Activity, MessageSquare } from 'lucide-react';
+import { getClientSessions, addSessionFeedback } from '../api'; // Pointing up to api.ts
+import { toast } from 'react-toastify';
 
-const api = axios.create({
-    baseURL: 'http://localhost:8080',
-});
+const SessionHistory = () => {
+    const { id } = useParams<{ id: string }>();
+    const [sessions, setSessions] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [feedbackText, setFeedbackText] = useState<{ [key: string]: string }>({});
 
-api.interceptors.request.use(async (config) => {
-    try {
-        await keycloak.updateToken(30);
-    } catch (error) {
-        console.error("Failed to refresh token", error);
-        keycloak.login();
-    }
-    if (keycloak.token) { 
-        config.headers.Authorization = `Bearer ${keycloak.token}`;
-    } 
-    return config;
-});
+    const loadSessions = async () => {
+        if (!id) return;
+        try {
+            const data = await getClientSessions(id);
+            setSessions(data);
+        } catch (err) {
+            toast.error("Failed to load session history");
+        } finally {
+            setLoading(false);
+        }
+    };
 
-export const getClients = async () => {
-    const response = await api.get('/trainer/clients');
-    return response.data;
+    useEffect(() => {
+        loadSessions();
+    }, [id]);
+
+    const handleFeedbackSubmit = async (sessionId: string) => {
+        try {
+            await addSessionFeedback(sessionId, {
+                feedback: feedbackText[sessionId],
+                performance_rating: 5 // Default rating, could be a slider
+            });
+            toast.success("Feedback saved");
+            loadSessions();
+        } catch (err) {
+            toast.error("Failed to save feedback");
+        }
+    };
+
+    if (loading) return <div className="loading-spinner"></div>;
+
+    return (
+        <section className="session-history">
+            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Activity size={24} color="var(--primary)" />
+                Recent Training Sessions
+            </h2>
+
+            {sessions.length === 0 ? (
+                <div className="empty-state">
+                    <p>No recorded sessions for this athlete yet.</p>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {sessions.map((session) => (
+                        <div key={session.id} className="stat-card" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginBottom: '1rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <Calendar size={18} color="var(--text-secondary)" />
+                                    <span style={{ fontWeight: 600 }}>{new Date(session.date).toLocaleDateString()}</span>
+                                </div>
+                                <div className="nav-badge" style={{ background: 'var(--success-light)', color: 'var(--success)' }}>
+                                    Completed
+                                </div>
+                            </div>
+
+                            <div className="form-group" style={{ width: '100%', marginBottom: '0' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <MessageSquare size={14} /> Coach Feedback
+                                </label>
+                                <textarea
+                                    className="search-input"
+                                    style={{ padding: '10px', height: '80px', marginTop: '8px' }}
+                                    placeholder="Add session notes..."
+                                    defaultValue={session.feedback}
+                                    onChange={(e) => setFeedbackText({ ...feedbackText, [session.id]: e.target.value })}
+                                />
+                                <button
+                                    className="view-profile-btn"
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', marginTop: '10px' }}
+                                    onClick={() => handleFeedbackSubmit(session.id)}
+                                >
+                                    Update Feedback →
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
 };
 
-export const getClientById = async (id: string) => {
-    const response = await api.get(`/trainer/clients/${id}`);
-    return response.data;
-};
-
-export const createClient = async (clientData: { name: string; goal: string; profile: string }) => {
-    const response = await api.post('/trainer/clients', clientData);
-    return response.data;
-};
-
-export const deleteClient = async (id: string) => {
-    await api.delete(`/trainer/clients/${id}`);
-};
-
-export const getClientSessions = async (clientId: string) => {
-    const response = await api.get(`/trainer/clients/${clientId}/sessions`);
-    return response.data;
-};
-
-export const addSessionFeedback = async (sessionId: string, feedback: { feedback: string; performance_rating: number }) => {
-    const response = await api.patch(`/trainer/sessions/${sessionId}/feedback`, feedback);
-    return response.data;
-};
-
-export { api };
+export default SessionHistory;

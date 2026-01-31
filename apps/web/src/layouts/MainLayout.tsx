@@ -1,4 +1,3 @@
-import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, Activity, LogOut, TrendingUp } from 'lucide-react';
 import { ToastContainer } from 'react-toastify';
