@@ -1,0 +1,12 @@
+*.tfvars
+*/certs/**
+*/.terraform/**
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.log
+*.backup
+*.env
+recent_commands
+tfplan
+**/apps/api/.env

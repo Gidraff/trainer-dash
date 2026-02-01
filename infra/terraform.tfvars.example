@@ -1,0 +1,42 @@
+# ============================================================
+# FitFlow AI — Example tfvars
+# Copy to terraform.tfvars and fill in real values.
+# ============================================================
+
+# --- Required (no defaults) -------------------------------------------
+project_id = "your-gcp-project-id"
+
+# --- Optional overrides -----------------------------------------------
+region = "us-central1"
+zone   = "us-central1-a"
+
+# Networking
+vpc_name              = "fitflow-vpc"
+api_subnet_cidr       = "10.0.0.0/24"
+frontend_subnet_cidr  = "10.0.1.0/24"
+gke_pod_cidr          = "10.4.0.0/14"
+gke_svc_cidr          = "10.8.0.0/20"
+
+# GKE
+gke_cluster_name = "fitflow-gke"
+gke_node_count   = 2                  # minimum 1
+gke_machine_type = "e2-standard-2"    # 2 vCPU, 8 GB
+
+# Cloud SQL
+db_instance_name = "fitflow-postgres"
+db_tier          = "db-custom-2-7680"  # 2 vCPU, 7.5 GB
+db_name          = "trainerdb"
+db_user          = "trainer"
+db_password      = "CHANGE_ME"         # or use TF_VAR_db_password env var
+
+# Keycloak
+keycloak_admin_user     = "admin"
+keycloak_admin_password = "CHANGE_ME"  # or use TF_VAR_keycloak_admin_password
+
+# DNS  — set to your registered domain to create Cloud DNS records.
+#         Leave as "" to skip DNS entirely.
+domain = ""
+# Example: domain = "fitflow.ai"
+#   creates:  app.fitflow.ai   → frontend
+#             api.fitflow.ai   → API
+#             auth.fitflow.ai  → Keycloak
