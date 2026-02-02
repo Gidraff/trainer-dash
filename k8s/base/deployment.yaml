@@ -18,6 +18,17 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            - name: KEYCLOAK_ISSUER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: fitflow-api-config
+                  key: KEYCLOAK_ISSUER_URL
+
+            - name: KEYCLOAK_INTERNAL_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: fitflow-api-config
+                  key: KEYCLOAK_INTERNAL_URL
             - name: RUST_LOG
               valueFrom:
                 configMapKeyRef:
@@ -59,7 +70,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
-          
+
           readinessProbe:
             httpGet:
               path: /health
