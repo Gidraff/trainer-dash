@@ -6,4 +6,5 @@ resources:
 # ArgoCD monitors this specific block:
 images:
 - name: fitflow-api
+  newName: us-central1-docker.pkg.dev/gidraff-cloudkite-58sdk3/fitflow/fitflow-api
   newTag: 8d15d4be9d476feebf6e9b307221e21b39dc5b59
