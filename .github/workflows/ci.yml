@@ -49,26 +49,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 1. Official Google Auth (WIF)
       - name: Authenticate to Google Cloud
         id: auth
-        uses: google-github-actions/auth@v2
+        uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
-      # Use the OFFICIAL Google Cloud SQL Auth Proxy Action
+      # 2. Official Cloud SQL Proxy Action
       - name: Set up Cloud SQL Proxy
-        uses: "google-github-actions/cloud-sql-proxy@v1"
+        uses: "google-github-actions/setup-cloud-sql-proxy@v1"
         with:
           instance-connection-name: ${{ secrets.CLOUD_SQL_CONNECTION }}
           port: 5432
 
+      # 3. Run Migrations
       - name: Run Migrations
         env:
           DATABASE_URL: postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASS }}@127.0.0.1:5432/${{ secrets.DB_NAME }}
         run: |
+          cd apps/api
           cargo install sqlx-cli --no-default-features --features postgres
-          cd apps/api && sqlx migrate run
+          sqlx migrate run
 
       # Build and Push
       - name: Set up Docker Buildx
