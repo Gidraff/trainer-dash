@@ -21,7 +21,7 @@ spec:
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: fitflow-db-secret
+                  name: fitflow-db-secrets
                   key: username
             - name: DB_PASS
               valueFrom:
