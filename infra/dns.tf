@@ -38,6 +38,22 @@ resource "google_dns_record_set" "www" {
   rrdatas      = [google_compute_global_address.ingress_ip.address]
 }
 
+resource "google_dns_record_set" "api" {
+  name         = "api.${var.domain}." # <--- CRITICAL: MUST HAVE TRAILING DOT
+  type         = "A"
+  ttl          = 300
+  managed_zone = google_dns_managed_zone.primary.name
+  rrdatas      = [google_compute_global_address.ingress_ip.address]
+}
+
+resource "google_dns_record_set" "argocd" {
+  name         = "argocd.${var.domain}." # <--- CRITICAL: MUST HAVE TRAILING DOT
+  type         = "A"
+  ttl          = 300
+  managed_zone = google_dns_managed_zone.primary.name
+  rrdatas      = [google_compute_global_address.ingress_ip.address]
+}
+
 # 4. Google-Managed SSL Certificate
 resource "random_id" "cert_suffix" {
   byte_length = 4
