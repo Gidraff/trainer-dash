@@ -6,28 +6,22 @@ on:
   pull_request:
 
 jobs:
-  # 1. Test both apps (always runs)
   test-backend:
     runs-on: ubuntu-latest
     env:
-      SQLX_OFFLINE: true # Forces compiler to use the .sqlx directory
+      SQLX_OFFLINE: true
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
+      - uses: dtolnay/rust-toolchain@stable
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2 # Speeds up build times significantly
+        uses: Swatinem/rust-cache@v2
         with:
-          work-dir: apps/api
-
+          # FIXED: 'workspaces' is the correct key for monorepos
+          workspaces: "apps/api -> target"
       - name: Verify SQLx Cache
-        # This fails if you changed SQL queries but forgot to run 'cargo sqlx prepare'
         run: |
           cargo install sqlx-cli --no-default-features --features postgres
           cd apps/api && cargo sqlx prepare --check -- --all-targets
-
       - name: Rust Test
         run: cd apps/api && cargo test
 
@@ -38,7 +32,6 @@ jobs:
       - name: Node Test
         run: cd apps/web && npm ci && npm run build
 
-  # 2. Build, Migrate and Push (only on main)
   deploy:
     needs: [test-backend, test-frontend]
     if: github.ref == 'refs/heads/main'
@@ -49,19 +42,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 1. Auth & SDK
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
+      # 2. FIXED ORDER: Install Postgres Client first
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      # 3. Start Proxy (Direct Download is the most stable workaround)
       - name: Start Cloud SQL Proxy
         run: |
           curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64
           chmod +x cloud-sql-proxy
-          ./cloud-sql-proxy ${{ secrets.CLOUD_SQL_CONNECTION }} --port 5432 &
-          sleep 5
+          ./cloud-sql-proxy ${{ secrets.CLOUD_SQL_CONNECTION }} --port 5432 > proxy.log 2>&1 &
+          echo $! > proxy.pid
 
+      # 4. Smart Wait Loop
+      - name: Wait for Cloud SQL Proxy
+        run: |
+          echo "Waiting for Proxy..."
+          timeout=30
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if pg_isready -h 127.0.0.1 -p 5432 > /dev/null 2>&1; then
+              echo "✓ Proxy Ready"
+              exit 0
+            fi
+            sleep 2
+            elapsed=$((elapsed + 2))
+          done
+          echo "✗ Proxy failed. Logs:"
+          cat proxy.log
+          exit 1
+
+      # 5. Run Migrations
       - name: Run Migrations
         env:
           DATABASE_URL: postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASS }}@127.0.0.1:5432/${{ secrets.DB_NAME }}
@@ -70,18 +93,21 @@ jobs:
           cargo install sqlx-cli --no-default-features --features postgres
           sqlx migrate run
 
-      # Build and Push
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # 6. Build and Push (With Registry Caching)
+      - name: Build & Push Images
+        run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev
+          
+          # API Image
+          docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:latest ./apps/api
+          docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:latest
+          
+          # Frontend Image
+          docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/frontend:latest ./apps/web
+          docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/frontend:latest
 
-      - name: Build & Push API Image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./apps/api
-          push: true
-          # Note: We use the Git SHA for specific versioning, plus 'latest'
-          tags: |
-            us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:${{ github.sha }}
-            us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:latest
-          build-args: |
-            SQLX_OFFLINE=true
+      # 7. Cleanup
+      - name: Stop Proxy
+        if: always()
+        run: |
+          [ -f proxy.pid ] && kill $(cat proxy.pid) || true
