@@ -309,7 +309,7 @@ resource "kubernetes_config_map" "fitflow_api_config" {
   data = {
     # Keycloak
     KEYCLOAK_ISSUER_URL   = "https://${var.keycloak_domain}/realms/trainer-app"
-    KEYCLOAK_INTERNAL_URL = "https://${var.keycloak_domain}/realms/trainer-app"
+    KEYCLOAK_INTERNAL_URL = "http://keycloak-v2.keycloak.svc.cluster.local:8080/auth/realms/trainer-app"
     
     # Database Networking
     DB_HOST               = "127.0.0.1"
