@@ -48,7 +48,7 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
-      
+
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
@@ -63,14 +63,14 @@ jobs:
         run: |
           curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64
           chmod +x cloud-sql-proxy
-          
-          # ADDED: --impersonate-service-account flag
-          # This converts your GitHub Federated Identity into a "real" Service Account identity
+
+          # Use ONLY the connection name. 
+          # The proxy will automatically use the WIF credentials 
+          # from the 'Authenticate to Google Cloud' step.
           ./cloud-sql-proxy \
-            --impersonate-service-account ${{ secrets.GCP_SA_EMAIL }} \
             ${{ secrets.CLOUD_SQL_CONNECTION }} \
             --port 5432 > proxy.log 2>&1 &
-          
+
           echo $! > proxy.pid
 
       # 4. Smart Wait Loop
@@ -104,11 +104,11 @@ jobs:
       - name: Build & Push Images
         run: |
           gcloud auth configure-docker us-central1-docker.pkg.dev
-          
+
           # API Image
           docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:latest ./apps/api
           docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:latest
-          
+
           # Frontend Image
           docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/frontend:latest ./apps/web
           docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/frontend:latest
