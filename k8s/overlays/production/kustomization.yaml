@@ -7,4 +7,4 @@ resources:
 images:
 - name: fitflow-api
   newName: us-central1-docker.pkg.dev/gidraff-cloudkite-58sdk3/fitflow/api
-  newTag: 84dc0508988a4958427ffc69654b85747bd072ae
+  newTag: e690673706524a05f05efe47de5987069c8d8377
