@@ -9,7 +9,7 @@ resource "google_sql_database_instance" "db" {
   settings {
     tier = "db-f1-micro"
     ip_configuration {
-      ipv4_enabled    = false
+      ipv4_enabled    = true
       private_network = google_compute_network.main.id
     }
   }
