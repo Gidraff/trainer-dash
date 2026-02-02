@@ -312,8 +312,6 @@ resource "kubernetes_config_map" "fitflow_api_config" {
     KEYCLOAK_INTERNAL_URL = "http://keycloak-v2.keycloak.svc.cluster.local:8080/auth/realms/trainer-app"
     
     # Database Networking
-    DB_HOST               = "127.0.0.1"
-    DB_PORT               = "5432"
     DB_NAME               = var.db_name
     
     # Application Settings
