@@ -30,3 +30,12 @@ resource "google_sql_user" "db_user" {
   instance = google_sql_database_instance.db.name
   password = var.db_password
 }
+resource "google_sql_database" "api_db" {
+  name     = "fitflow_db"
+  instance = google_sql_database_instance.db.name
+}
+resource "google_sql_user" "api_user" {
+  name     = "fitflow_admin"
+  instance = google_sql_database_instance.db.name
+  password = var.db_password
+}

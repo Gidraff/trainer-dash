@@ -10,8 +10,18 @@ spec:
         - name: api
           image: us-central1-docker.pkg.dev/project/fitflow/api:latest
           env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: fitflow-db-secrets
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fitflow-db-secrets
+                  key: password
             - name: DATABASE_URL
-              value: "postgresql://user:pass@127.0.0.1:5432/db" # Connects via sidecar
+              value: "postgresql://$(DB_USER):$(DB_PASSWORD)@127.0.0.1:5432/fitflow_db" # Connects via sidecar
           resources:
             requests:
               cpu: "100m"
