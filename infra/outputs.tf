@@ -7,9 +7,11 @@ output "cloud_sql_private_ip" {
 }
 
 output "ingress_static_ip" {
-  value = google_compute_global_address.frontend_ip.address
+  value = google_compute_global_address.ingress_ip.address
 }
 
 output "dns_name_servers" {
   value = google_dns_managed_zone.primary.name_servers
 }
+
+

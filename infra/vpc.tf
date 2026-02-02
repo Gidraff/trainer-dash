@@ -34,3 +34,48 @@ resource "google_service_networking_connection" "private_vpc_connection" {
   reserved_peering_ranges = [google_compute_global_address.private_ip_alloc.name]
   deletion_policy         = "ABANDON" # Prevents the 'Service Producer' lock on destroy
 }
+
+resource "google_compute_network_peering_routes_config" "peering_routes" {
+  project = var.project_id
+  network = google_compute_network.main.name
+  peering = google_service_networking_connection.private_vpc_connection.peering
+
+  # This is the "magic" that allows Pod ranges to reach Cloud SQL
+  export_custom_routes = true
+  import_custom_routes = true
+}
+
+resource "google_compute_router" "router" {
+  name    = "cordiafit-router"
+  region  = var.region
+  network = google_compute_network.main.id
+}
+
+resource "google_compute_router_nat" "nat" {
+  name                               = "cordiafit-nat"
+  router                             = google_compute_router.router.name
+  region                             = var.region
+  nat_ip_allocate_option             = "AUTO_ONLY"
+  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+
+  log_config {
+    enable = true
+    filter = "ERRORS_ONLY"
+  }
+}
+
+resource "google_compute_firewall" "allow_keycloak_health_9000" {
+  name          = "allow-keycloak-health-9000"
+  direction     = "INGRESS"
+  network       = "cordiafit-vpc" # Replace with your actual VPC resource/name
+  priority      = 1000
+  source_ranges = ["130.211.0.0/22", "35.191.0.0/16"] # Google Health Check Ranges
+
+  allow {
+    protocol = "tcp"
+    ports    = ["9000"]
+  }
+
+  # This ensures it applies to your GKE nodes
+  target_tags = ["gke-cordiafit-cluster"]
+}

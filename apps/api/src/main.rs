@@ -25,7 +25,19 @@ async fn main() {
 
     // 1. Database Setup
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let pool: PgPool = db::create_pool(&database_url).await;
+    let mut retry_count = 0;
+    let pool = loop {
+        // Explicitly handle the Result returned by the async connect call
+        let connection_attempt = sqlx::PgPool::connect(&database_url).await;
+
+        match connection_attempt {
+            Ok(p) => break p,
+            Err(e) => {
+                println!("Waiting for DB... {}", e);
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+        }
+    };
 
     // Run migrations (this will only work if the API compiles!)
     sqlx::migrate!()
@@ -35,8 +47,13 @@ async fn main() {
 
     // 2. Keycloak Setup (Local Configuration)
     // We use 8081 because the API is running on your host machine
-    let jwks_url = "http://localhost:8081/realms/trainer-app/protocol/openid-connect/certs";
+    let issuer_url = env::var("KEYCLOAK_ISSUER_URL")
+        .expect("KEYCLOAK_ISSUER_URL must be set in .env (e.g., http://localhost:8081/auth/realms/trainer-app)s");
 
+    let internal_url = env::var("KEYCLOAK_INTERNAL_URL")
+        .unwrap_or_else(|_| "http://keycloak:8080/auth/realms/trainer-app".to_string());
+
+    let jwks_url = format!("{}/protocol/openid-connect/certs", internal_url);
     println!("🔐 Fetching JWKS from: {}", jwks_url);
 
     // Fetch the response safely to debug HTML errors
@@ -64,7 +81,7 @@ async fn main() {
 
     let auth_config = auth::middleware::AuthState {
         jwks: Arc::new(jwks),
-        issuer: "http://localhost:8081/realms/trainer-app".into(),
+        issuer: issuer_url,
         audience: "trainer-api".into(),
     };
 

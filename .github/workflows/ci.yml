@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
@@ -6,50 +6,52 @@ on:
   pull_request:
 
 jobs:
-  backend:
+  # 1. Test both apps (always runs)
+  test-backend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust Test
+        run: cd apps/api && cargo test
 
-    services:
-      postgres:
-        image: postgres:16
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node Test
+        run: cd apps/web && npm ci && npm run build
+
+  # 2. Build and Push (only on main)
+  deploy:
+    needs: [test-backend, test-frontend]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write" # Required for Workload Identity
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Set up Cloud SQL Proxy (For Migrations)
+        uses: ahmadnassri/action-google-cloud-sql-proxy@v1
+        with:
+          connection: ${{ secrets.CLOUD_SQL_CONNECTION }}
+          port: 5432
+
+      - name: Run Migrations
         env:
-          POSTGRES_USER: trainer
-          POSTGRES_PASSWORD: trainer
-          POSTGRES_DB: trainerdb
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          DATABASE_URL: postgresql://${{ secrets.DB_USER }}:${{ secrets.DB_PASS }}@127.0.0.1:5432/${{ secrets.DB_NAME }}
+        run: cd apps/api && cargo install sqlx-cli && sqlx migrate run
 
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions-rs/toolchain@v1
+      - name: Build & Push API Image
+        uses: docker/build-push-action@v5
         with:
-          toolchain: stable
-          override: true
-
-      - name: Run backend tests
-        run: cargo test
-
-  frontend:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - run: npm ci
-      - run: npm run build
+          context: ./apps/api
+          push: true
+          tags: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:${{ github.sha }}

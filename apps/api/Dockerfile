@@ -9,7 +9,11 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release
 RUN rm -rf src
 
+COPY .sqlx ./.sqlx
+
 COPY . .
+
+ENV SQLX_OFFLINE=true
 # Final build of your actual source code
 RUN cargo build --release
 
