@@ -97,17 +97,24 @@ jobs:
           sqlx migrate run
 
       # 6. Build and Push (With Registry Caching)
+      # 6. Build and Push (With both 'latest' and 'sha' tags)
       - name: Build & Push Images
         run: |
           gcloud auth configure-docker us-central1-docker.pkg.dev
 
-          # API Image
-          docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:latest ./apps/api
-          docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:latest
+          # Tag variables
+          REPO="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow"
+          SHA_TAG="${{ github.sha }}"
+
+          # API Image: Push both latest and the specific commit SHA
+          docker build -t $REPO/api:latest -t $REPO/api:$SHA_TAG ./apps/api
+          docker push $REPO/api:latest
+          docker push $REPO/api:$SHA_TAG
 
           # Frontend Image
-          docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/frontend:latest ./apps/web
-          docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/frontend:latest
+          docker build -t $REPO/frontend:latest -t $REPO/frontend:$SHA_TAG ./apps/web
+          docker push $REPO/frontend:latest
+          docker push $REPO/frontend:$SHA_TAG
 
       - name: Update Image in K8s
         run: |
@@ -115,15 +122,20 @@ jobs:
           # This command modifies the kustomization.yaml file locally
           kustomize edit set image fitflow-api=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:${{ github.sha }}
 
-      - name: Update K8s Manifest
+      - name: Update and Push K8s Manifest
         run: |
           cd k8s/overlays/production
           kustomize edit set image fitflow-api=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:${{ github.sha }}
+
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
+
           git add kustomization.yaml
-          git commit -m "deploy: update image to ${{ github.sha }} [skip ci]"
-          git push
+          git commit -m "deploy: update image to ${{ github.sha }} [skip ci]" || echo "No changes to commit"
+
+          # Pull latest changes to avoid 'rejected' errors before pushing
+          git pull --rebase origin main
+          git push origin main
 
       # 7. Cleanup
       - name: Stop Proxy
