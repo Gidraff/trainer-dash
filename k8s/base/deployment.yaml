@@ -47,7 +47,7 @@ spec:
             - name: DB_NAME
               valueFrom:
                 secretKeyRef:
-                  name: fitflow-db-secret
+                  name: fitflow-db-secrets
                   key: dbname
             - name: DATABASE_URL
               value: "postgresql://$(DB_USER):$(DB_PASS)@127.0.0.1:5432/$(DB_NAME)"
