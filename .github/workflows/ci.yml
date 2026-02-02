@@ -44,12 +44,13 @@ jobs:
 
       # 1. Auth & SDK
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
         id: auth
+        uses: google-github-actions/auth@v2
         with:
-          token_format: 'access_token'
+          project_id: ${{ secrets.GCP_PROJECT }} # Explicitly add this
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
+          token_format: 'access_token'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
