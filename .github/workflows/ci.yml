@@ -57,7 +57,7 @@ jobs:
 
       # Setup for Migrations
       - name: Set up Cloud SQL Proxy
-        uses: ahmadnassri/action-google-cloud-sql-proxy@v1
+        uses: 'google-github-actions/cloud-sql-proxy@v1'
         with:
           connection: ${{ secrets.CLOUD_SQL_CONNECTION }}
           port: 5432
