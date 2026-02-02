@@ -48,7 +48,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: fitflow-db-secrets
-                  key: dbname
+                  key: database
             - name: DATABASE_URL
               value: "postgresql://$(DB_USER):$(DB_PASS)@127.0.0.1:5432/$(DB_NAME)"
           livenessProbe:
