@@ -18,6 +18,22 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: fitflow-api-config
+                  key: RUST_LOG
+
+            - name: APP_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: fitflow-api-config
+                  key: APP_HOST
+            - name: APP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: fitflow-api-config
+                  key: APP_PORT
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
@@ -26,7 +42,7 @@ spec:
             - name: DB_PASS
               valueFrom:
                 secretKeyRef:
-                  name: fitflow-db-secret
+                  name: fitflow-db-secrets
                   key: password
             - name: DB_NAME
               valueFrom:

@@ -299,3 +299,43 @@ resource "kubernetes_ingress_v1" "argocd_ingress" {
 # 4. HELM RELEASES & 5. ISSUERS (Remains Unchanged)
 ################################################################################
 # [Existing Helm and Null Resource blocks continue here...]
+
+
+resource "kubernetes_config_map" "fitflow_api_config" {
+  metadata {
+    name = "fitflow-api-config"
+  }
+
+  data = {
+    # Keycloak
+    KEYCLOAK_ISSUER_URL   = "https://${var.keycloak_domain}/realms/trainer-app"
+    KEYCLOAK_INTERNAL_URL = "https://${var.keycloak_domain}/realms/trainer-app"
+    
+    # Database Networking
+    DB_HOST               = "127.0.0.1"
+    DB_PORT               = "5432"
+    DB_NAME               = var.db_name
+    
+    # Application Settings
+    RUST_LOG              = var.rust_log
+    APP_HOST              = var.app_host
+    APP_PORT              = var.app_port
+  }
+}
+
+# Secret remains the same as before...
+# Secret for sensitive credentials
+resource "kubernetes_secret" "fitflow_api_secrets" {
+  metadata {
+    name = "fitflow-api-secrets"
+  }
+
+  type = "Opaque"
+
+  # data allows you to provide plain text in TF, 
+  # which K8s then encodes to base64 automatically.
+  data = {
+    DB_USER = var.db_user
+    DB_PASS = var.db_password
+  }
+}

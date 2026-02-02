@@ -153,14 +153,26 @@ async fn main() {
         .merge(protected_routes)
         .layer(cors)
         .with_state(state);
+    
 
+    tracing_subscriber::fmt()
+        .with_env_filter(env::var("RUST_LOG").unwrap_or_else(|_| "info".into()))
+        .init();
+
+    tracing::info!("Starting FitFlow API server...");
+    let host = env::var("APP_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port = env::var("APP_PORT").unwrap_or_else(|_| "8080".to_string())
+        .parse::<u16>()
+        .expect("APP_PORT must be a valid u16");
+
+    tracing::info!("Attempting to connect to database...");
+
+    let addr: SocketAddr = format!("{}:{}", host, port)
+        .parse()
+        .expect("Failed to parse socket address");
+    tracing::info!("🚀 Server running at http://{}", addr);
     // 5. Server Start
-    let addr = "0.0.0.0:8080";
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-
-    println!("\n🚀 FitFlow API running locally on http://localhost:8080");
-    println!("📡 Connecting to Docker Keycloak on http://localhost:8081");
-    println!("🗄️  Connecting to Docker Postgres on localhost:5432\n");
 
     axum::serve(listener, app.into_make_service())
         .await
