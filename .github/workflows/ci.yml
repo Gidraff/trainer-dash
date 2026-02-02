@@ -37,7 +37,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      contents: "read"
+      contents: "write"
       id-token: "write"
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +49,7 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
-          token_format: 'access_token'
+          token_format: "access_token"
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -64,13 +64,10 @@ jobs:
         run: |
           curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64
           chmod +x cloud-sql-proxy
-          
+
           # REMOVED --private-ip to use the new Public IP path
-          ./cloud-sql-proxy \
-            ${{ secrets.CLOUD_SQL_CONNECTION }} \
-            --port 5432 > proxy.log 2>&1 &
-          
-          echo $! > proxy.pid
+          ./cloud-sql-proxy ${{ secrets.GCP_PROJECT }}:${{ secrets.GCP_REGION }}:${{ secrets.DB_INSTANCE_NAME }} --port 5432 &
+          sleep 5 # Give it a second to initialize
 
       # 4. Smart Wait Loop
       - name: Wait for Cloud SQL Proxy
@@ -117,7 +114,7 @@ jobs:
           cd k8s/overlays/production
           # This command modifies the kustomization.yaml file locally
           kustomize edit set image fitflow-api=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:${{ github.sha }}
-          
+
       - name: Update K8s Manifest
         run: |
           cd k8s/overlays/production
