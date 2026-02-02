@@ -39,17 +39,27 @@ resource "google_dns_record_set" "www" {
 }
 
 # 4. Google-Managed SSL Certificate
+resource "random_id" "cert_suffix" {
+  byte_length = 4
+}
 resource "google_compute_managed_ssl_certificate" "default" {
-  name = "cordiafit-cert"
+  name = "cordiafit-cert-${random_id.cert_suffix.hex}"
   managed {
     domains = [
       var.domain,
       "www.${var.domain}",
-      "auth.${var.domain}"
+      "auth.${var.domain}",
+      "api.${var.domain}",
+      "argocd.${var.domain}",
     ]
+  }
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
 output "ingress_ip_address" {
   value = google_compute_global_address.ingress_ip.address
 }
+
+# VYfEW7uxYbzcKmA6%

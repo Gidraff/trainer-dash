@@ -112,6 +112,22 @@ jobs:
           docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/frontend:latest ./apps/web
           docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/frontend:latest
 
+      - name: Update Image in K8s
+        run: |
+          cd k8s/overlays/production
+          # This command modifies the kustomization.yaml file locally
+          kustomize edit set image fitflow-api=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:${{ github.sha }}
+          
+      - name: Update K8s Manifest
+        run: |
+          cd k8s/overlays/production
+          kustomize edit set image fitflow-api=us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow/api:${{ github.sha }}
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add kustomization.yaml
+          git commit -m "deploy: update image to ${{ github.sha }} [skip ci]"
+          git push
+
       # 7. Cleanup
       - name: Stop Proxy
         if: always()

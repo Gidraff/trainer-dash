@@ -154,10 +154,36 @@ resource "kubernetes_service" "keycloak" {
   }
 }
 
+
+resource "helm_release" "argocd" {
+  name       = "argocd"
+  repository = "https://argoproj.github.io/argo-helm"
+  chart      = "argo-cd"
+  version    = "7.7.11" # Use the latest stable version
+  namespace  = kubernetes_namespace.argocd.metadata[0].name
+
+  values = [
+    yamlencode({
+      configs = {
+        params = {
+          "server.insecure" = "true"
+        }
+      }
+      global = {
+        domain = "argocd.${var.domain}"
+      }
+      server = {
+        service = {
+          type = "NodePort"
+        }
+      }
+    })
+  ]
+}
+
 ################################################################################
 # 3. THE UNIFIED INGRESS
 ################################################################################
-
 resource "kubernetes_ingress_v1" "main_ingress" {
   metadata {
     name      = "main-ingress"
@@ -203,6 +229,70 @@ resource "kubernetes_ingress_v1" "main_ingress" {
       }
     }
   }
+}
+
+resource "kubernetes_ingress_v1" "api_ingress" {
+  metadata {
+    name      = "api-ingress"
+    namespace = "default"
+    annotations = {
+      "kubernetes.io/ingress.class"                 = "gce"
+      "kubernetes.io/ingress.global-static-ip-name" = google_compute_global_address.ingress_ip.name
+      "ingress.gcp.kubernetes.io/pre-shared-cert"   = google_compute_managed_ssl_certificate.default.name
+      "kubernetes.io/ingress.allow-http"            = "false"
+    }
+  }
+
+  spec {
+    rule {
+      host = "api.${var.domain}"
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "fitflow-api-service" # Make sure this matches your svc name
+              port { number = 80 }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+resource "kubernetes_ingress_v1" "argocd_ingress" {
+  metadata {
+    name      = "argocd-ingress"
+    namespace = kubernetes_namespace.argocd.metadata[0].name
+    annotations = {
+      "kubernetes.io/ingress.class"                 = "gce"
+      "kubernetes.io/ingress.global-static-ip-name" = google_compute_global_address.ingress_ip.name
+      "ingress.gcp.kubernetes.io/pre-shared-cert"   = google_compute_managed_ssl_certificate.default.name
+      "kubernetes.io/ingress.allow-http"            = "false"
+    }
+  }
+
+  spec {
+    rule {
+      host = "argocd.${var.domain}"
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "argocd-server" # Standard service name created by the Helm chart
+              port { number = 80 }   # Matches the 'server.insecure=true' setting
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [helm_release.argocd]
 }
 
 ################################################################################

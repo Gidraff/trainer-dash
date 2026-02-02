@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fitflow-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fitflow-api
+  template:
+    metadata:
+      labels:
+        app: fitflow-api
+    spec:
+      containers:
+        - name: api
+          image: fitflow-api:placeholder # Overridden by Kustomize
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://${DB_USER}:${DB_PASS}@127.0.0.1:5432/${DB_NAME}"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+        # Sidecar for Database Access
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+          args:
+            - "--port=5432"
+            - "gidraff-cloudkite-58sdk3:us-central1:cordiafit-db"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"

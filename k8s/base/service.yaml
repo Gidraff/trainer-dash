@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: fitflow-api-service
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}' # Critical for GKE Ingress performance
+spec:
+  selector:
+    app: fitflow-api
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+  type: NodePort
