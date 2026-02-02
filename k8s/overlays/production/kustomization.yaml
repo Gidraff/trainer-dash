@@ -1,9 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../base
+- ../../base
 
 # ArgoCD monitors this specific block:
 images:
 - name: fitflow-api
-  newTag: 8d15d4be9d476feebf6e9b307221e21b39dc5b59
+  newName: us-central1-docker.pkg.dev/gidraff-cloudkite-58sdk3/fitflow/api
+  newTag: 3b18b6f04ac84cd97bdb57a326566a906aa7a2b1
