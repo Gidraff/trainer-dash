@@ -63,7 +63,14 @@ jobs:
         run: |
           curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.2/cloud-sql-proxy.linux.amd64
           chmod +x cloud-sql-proxy
-          ./cloud-sql-proxy ${{ secrets.CLOUD_SQL_CONNECTION }} --port 5432 > proxy.log 2>&1 &
+          
+          # ADDED: --impersonate-service-account flag
+          # This converts your GitHub Federated Identity into a "real" Service Account identity
+          ./cloud-sql-proxy \
+            --impersonate-service-account ${{ secrets.GCP_SA_EMAIL }} \
+            ${{ secrets.CLOUD_SQL_CONNECTION }} \
+            --port 5432 > proxy.log 2>&1 &
+          
           echo $! > proxy.pid
 
       # 4. Smart Wait Loop
