@@ -9,6 +9,10 @@ use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use std::net::SocketAddr;
 
+// These imports are required for the tracing macros to work
+use tracing::{info, warn, error}; 
+use tracing_subscriber;
+
 mod auth;
 mod db;
 mod handlers;
@@ -25,27 +29,25 @@ async fn main() {
     // 1. Load environment variables
     dotenvy::dotenv().ok();
 
-    // 2. Initialize Logging (MOVED TO TOP)
-    // This ensures every step below is logged properly.
+    // 2. Initialize Logging (Highest Priority)
     tracing_subscriber::fmt()
         .with_env_filter(env::var("RUST_LOG").unwrap_or_else(|_| "info".into()))
         .init();
 
-    tracing::info!("Initializing FitFlow API...");
+    info!("Initializing FitFlow API...");
 
-    // 3. Database Setup
+    // 3. Database Setup with Retry Loop
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     
-    // Using a loop to wait for the DB (handles the "Sidecar Race Condition")
     let pool = loop {
-        tracing::info!("Connecting to database at 127.0.0.1:5432...");
+        info!("Connecting to database...");
         match sqlx::PgPool::connect(&database_url).await {
             Ok(p) => {
-                tracing::info!("✅ Database connection established");
+                info!("✅ Database connection established");
                 break p;
             },
             Err(e) => {
-                tracing::warn!("Waiting for DB... (Error: {}). Retrying in 2s...", e);
+                warn!("Waiting for DB... (Error: {}). Retrying in 2s...", e);
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             }
         }
@@ -65,7 +67,7 @@ async fn main() {
         .unwrap_or_else(|_| "http://keycloak:8080/auth/realms/trainer-app".to_string());
 
     let jwks_url = format!("{}/protocol/openid-connect/certs", internal_url);
-    tracing::info!("🔐 Fetching JWKS from: {}", jwks_url);
+    info!("🔐 Fetching JWKS from: {}", jwks_url);
 
     let response = reqwest::get(&jwks_url)
         .await
@@ -77,7 +79,7 @@ async fn main() {
         .expect("Failed to read Keycloak response body");
 
     if body_text.contains("<html>") || body_text.contains("Page not found") {
-        tracing::error!("Keycloak returned HTML instead of JSON. Check realm configuration.");
+        error!("Keycloak returned HTML instead of JSON. Check realm configuration.");
         panic!("Keycloak config error. See logs.");
     }
 
@@ -96,15 +98,15 @@ async fn main() {
     };
 
     // 5. Routes & Middleware
-    let protected_routes: Router<AppState> = Router::new()
+    let protected_routes = Router::new()
         .route("/trainer/secure", get(|| async { "Secure content" }))
-        // ... (your other routes)
+        // ... include your other trainer routes here
         .layer(axum::middleware::from_fn_with_state(
             auth_config,
             auth::middleware::auth_middleware,
         ));
 
-    let public_routes: Router<AppState> = Router::new()
+    let public_routes = Router::new()
         .route("/", get(|| async { "FitFlow AI API - v1.0" }))
         .route("/health", get(|| async { "OK" }));
 
@@ -120,7 +122,7 @@ async fn main() {
         .layer(cors)
         .with_state(state);
 
-    // 6. Networking & Server Start
+    // 6. Server Start
     let host = env::var("APP_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let port = env::var("APP_PORT").unwrap_or_else(|_| "8080".to_string())
         .parse::<u16>()
@@ -130,8 +132,10 @@ async fn main() {
         .parse()
         .expect("Failed to parse socket address");
 
-    tracing::info!("🚀 Server starting at http://{}", addr);
+    info!("🚀 Server starting at http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app.into_make_service()).await.unwrap();
+    
+    // In Axum 0.7, you don't need into_make_service() anymore
+    axum::serve(listener, app).await.unwrap();
 }
