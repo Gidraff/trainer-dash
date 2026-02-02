@@ -12,26 +12,26 @@ spec:
       labels:
         app: fitflow-api
     spec:
-      initContainers:
-        - name: wait-for-db
-          image: busybox:1.36
-          command:
-            - sh
-            - -c
-            - |
-              echo "Waiting for Cloud SQL Proxy to be ready..."
-              until nc -z 127.0.0.1 5432; do
-                echo "Waiting for database connection..."
-                sleep 2
-              done
-              echo "Database is reachable!"
-          resources:
-            requests:
-              memory: "16Mi"
-              cpu: "10m"
-            limits:
-              memory: "32Mi"
-              cpu: "50m"
+      # initContainers:
+      #   - name: wait-for-db
+      #     image: busybox:1.36
+      #     command:
+      #       - sh
+      #       - -c
+      #       - |
+      #         echo "Waiting for Cloud SQL Proxy to be ready..."
+      #         until nc -z 127.0.0.1 5432; do
+      #           echo "Waiting for database connection..."
+      #           sleep 2
+      #         done
+      #         echo "Database is reachable!"
+      #     resources:
+      #       requests:
+      #         memory: "16Mi"
+      #         cpu: "10m"
+      #       limits:
+      #         memory: "32Mi"
+      #         cpu: "50m"
       containers:
         # Sidecar for Database Access
         - name: cloud-sql-proxy
@@ -97,23 +97,23 @@ spec:
                   key: database
             - name: DATABASE_URL
               value: "postgresql://$(DB_USER):$(DB_PASS)@127.0.0.1:5432/$(DB_NAME)"
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 60
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+          # livenessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: 8080
+          #   initialDelaySeconds: 60
+          #   periodSeconds: 10
+          #   timeoutSeconds: 5
+          #   failureThreshold: 3
 
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 45
-            periodSeconds: 5
-            timeoutSeconds: 6
-            failureThreshold: 3
+          # readinessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: 8080
+          #   initialDelaySeconds: 45
+          #   periodSeconds: 5
+          #   timeoutSeconds: 6
+          #   failureThreshold: 3
 
           resources:
             requests:
