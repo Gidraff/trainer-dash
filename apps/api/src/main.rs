@@ -19,46 +19,36 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() {
-    // FORCE STDOUT FLUSH - This WILL show up in logs
+    // 1. IMMEDIATE BINDING
+    // We bind early so Kubernetes probes (port 8080) don't get "Connection Refused"
+    let addr: SocketAddr = "0.0.0.0:8080".parse().unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await
+        .expect("CRITICAL: Failed to bind to 0.0.0.0:8080");
+
+    // FORCE STDOUT FLUSH
     use std::io::Write;
     let _ = std::io::stdout().flush();
     
-    eprintln!("=== FITFLOW API STARTING ===");
-    println!("=== FITFLOW API STARTING ===");
+    eprintln!("=== FITFLOW API STARTING (Port 8080 Active) ===");
     
     dotenvy::dotenv().ok();
     
     // Check env vars
-    eprintln!("Checking DATABASE_URL...");
-    let database_url = match env::var("DATABASE_URL") {
-        Ok(url) => {
-            eprintln!("✓ DATABASE_URL found");
-            url
-        },
-        Err(_) => {
-            eprintln!("❌ DATABASE_URL missing!");
-            std::process::exit(1);
-        }
-    };
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
+        eprintln!("❌ DATABASE_URL missing!");
+        std::process::exit(1);
+    });
     
-    eprintln!("Checking KEYCLOAK_INTERNAL_URL...");
-    let internal_url = match env::var("KEYCLOAK_INTERNAL_URL") {
-        Ok(url) => {
-            eprintln!("✓ KEYCLOAK_INTERNAL_URL: {}", url);
-            url
-        },
-        Err(_) => {
-            eprintln!("❌ KEYCLOAK_INTERNAL_URL missing!");
-            std::process::exit(1);
-        }
-    };
+    let internal_url = env::var("KEYCLOAK_INTERNAL_URL").unwrap_or_else(|_| {
+        eprintln!("❌ KEYCLOAK_INTERNAL_URL missing!");
+        std::process::exit(1);
+    });
     
     let issuer_url = env::var("KEYCLOAK_ISSUER_URL")
         .unwrap_or_else(|_| internal_url.clone());
     
+    // 2. DATABASE CONNECT WITH RETRY
     eprintln!("Connecting to database...");
-    
-    // Database with retry
     let pool = loop {
         match sqlx::PgPool::connect(&database_url).await {
             Ok(p) => {
@@ -66,7 +56,7 @@ async fn main() {
                 break p;
             },
             Err(e) => {
-                eprintln!("DB error: {}. Retrying...", e);
+                eprintln!("DB error: {}. Retrying in 2s...", e);
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             }
         }
@@ -77,7 +67,7 @@ async fn main() {
         .expect("Migrations failed");
     eprintln!("✅ Migrations complete");
     
-    // Keycloak
+    // 3. KEYCLOAK JWKS FETCH
     let jwks_url = format!("{}/protocol/openid-connect/certs", internal_url);
     eprintln!("Fetching JWKS from: {}", jwks_url);
     
@@ -87,7 +77,7 @@ async fn main() {
         .expect("Failed to read response");
     
     if body_text.contains("<html>") {
-        eprintln!("❌ Keycloak returned HTML!");
+        eprintln!("❌ Keycloak returned HTML! (Check your INTERNAL_URL)");
         std::process::exit(1);
     }
     
@@ -95,6 +85,7 @@ async fn main() {
         .expect("Failed to parse JWKS");
     eprintln!("✅ JWKS loaded");
     
+    // 4. APP STATE & ROUTES
     let auth_config = auth::middleware::AuthState {
         jwks: Arc::new(jwks),
         issuer: issuer_url,
@@ -106,7 +97,10 @@ async fn main() {
         auth: auth_config.clone(),
     };
     
-    // Routes
+    let public_routes = Router::new()
+        .route("/", get(|| async { "FitFlow API v1.0" }))
+        .route("/health", get(|| async { "OK" }));
+
     let protected_routes = Router::new()
         .route("/trainer/secure", get(|| async { "Secure" }))
         .route("/trainer/clients", post(handlers::trainer::create_client))
@@ -122,10 +116,6 @@ async fn main() {
             auth::middleware::auth_middleware,
         ));
     
-    let public_routes = Router::new()
-        .route("/", get(|| async { "FitFlow API v1.0" }))
-        .route("/health", get(|| async { "OK" }));
-    
     let cors = CorsLayer::new()
         .allow_origin("http://localhost:5173".parse::<axum::http::HeaderValue>().unwrap())
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
@@ -138,13 +128,6 @@ async fn main() {
         .layer(cors)
         .with_state(state);
     
-    let addr: SocketAddr = "0.0.0.0:8080".parse().unwrap();
-    eprintln!("🚀 Binding to {}", addr);
-    
-    let listener = tokio::net::TcpListener::bind(addr).await
-        .expect("Failed to bind");
-    
-    eprintln!("✅ Server ready!");
-    
+    eprintln!("✅ Server ready! Finalizing serve...");
     axum::serve(listener, app).await.unwrap();
 }
