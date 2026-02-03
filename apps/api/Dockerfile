@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/li
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release
+RUN ls -R target/release/
 RUN rm -rf src
 
 COPY .sqlx ./.sqlx
@@ -23,8 +24,8 @@ RUN apt-get update && apt-get install -y libssl3 ca-certificates && rm -rf /var/
 
 WORKDIR /app
 # Ensure 'api' matches the name in your Cargo.toml [package] section
-COPY --from=builder /app/target/release/api ./api
+COPY --from=builder /app/target/release/api /usr/local/bin/api
 
 EXPOSE 8080
 # Use the correct binary name
-CMD ["./api"]
+CMD ["api"]

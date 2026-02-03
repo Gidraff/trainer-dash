@@ -38,19 +38,17 @@ spec:
           args:
             - |
               export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@127.0.0.1:5432/${DB_NAME}"
-              BINARY_PATH=$(find / -name "api" -type f -executable | head -n 1)
-
-              echo "Checking binary dependencies..."
-              ldd "$BINARY_PATH" || echo "ldd not available or failed"
-
-              echo "Starting binary..."
-              exec "$BINARY_PATH"
+              echo "URL generated. Starting binary..."
+              # The '2>&1' forces all errors to show up in 'kubectl logs'
+              exec api 2>&1
 
           env:
             - name: KEYCLOAK_ISSUER_URL
               value: "https://auth.cordiafit.fit/auth/realms/trainer-app"
             - name: KEYCLOAK_INTERNAL_URL
               value: "http://keycloak-v2.keycloak.svc.cluster.local:8080/auth/realms/trainer-app"
+            - name: RUST_BACKTRACE
+              value: "full"
             - name: RUST_LOG
               value: "debug"
             - name: APP_HOST
@@ -62,13 +60,13 @@ spec:
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
-                  name: fitflow-db-secrets
-                  key: username
+                  name: fitflow-api-secrets
+                  key: DB_USER
             - name: DB_PASS
               valueFrom:
                 secretKeyRef:
-                  name: fitflow-db-secrets
-                  key: password
+                  name: fitflow-api-secrets
+                  key: DB_PASS
 
           startupProbe:
             httpGet:
