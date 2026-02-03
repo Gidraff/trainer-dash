@@ -98,46 +98,23 @@ jobs:
 
       # 6. Build and Push (With Registry Caching)
       # 6. Build and Push (With both 'latest' and 'sha' tags)
-      # - name: Build & Push Images
-      #   run: |
-      #     gcloud auth configure-docker us-central1-docker.pkg.dev
-
-      #     # Tag variables
-      #     REPO="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow"
-      #     SHA_TAG="${{ github.sha }}"
-
-      #     # API Image: Push both latest and the specific commit SHA
-      #     docker build -t $REPO/api:latest -t $REPO/api:$SHA_TAG ./apps/api
-      #     docker push $REPO/api:latest
-      #     docker push $REPO/api:$SHA_TAG
-
-      #     # Frontend Image
-      #     docker build -t $REPO/frontend:latest -t $REPO/frontend:$SHA_TAG ./apps/web
-      #     docker push $REPO/frontend:latest
-      #     docker push $REPO/frontend:$SHA_TAG
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build & Push API Image
+      - name: Build & Push Images
         run: |
-          REPO="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow"
-          # Buildx build and push in one command
-          docker buildx build \
-            --platform linux/amd64 \
-            -t $REPO/api:latest \
-            -t $REPO/api:${{ github.sha }} \
-            ./apps/api \
-            --push
+          gcloud auth configure-docker us-central1-docker.pkg.dev
 
-      - name: Build & Push Frontend Image
-        run: |
+          # Tag variables
           REPO="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/fitflow"
-          docker buildx build \
-            --platform linux/amd64 \
-            -t $REPO/frontend:latest \
-            -t $REPO/frontend:${{ github.sha }} \
-            ./apps/web \
-            --push
+          SHA_TAG="${{ github.sha }}"
+
+          # API Image: Push both latest and the specific commit SHA
+          docker build -t $REPO/api:latest -t $REPO/api:$SHA_TAG ./apps/api
+          docker push $REPO/api:latest
+          docker push $REPO/api:$SHA_TAG
+
+          # Frontend Image
+          docker build -t $REPO/frontend:latest -t $REPO/frontend:$SHA_TAG ./apps/web
+          docker push $REPO/frontend:latest
+          docker push $REPO/frontend:$SHA_TAG
 
       - name: Update Image in K8s
         run: |
