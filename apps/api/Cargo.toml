@@ -27,5 +27,5 @@ jsonwebtoken = "9"
 # Updated to 0.12 (better Axum 0.7 compatibility) and standardized TLS
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tower-http = { version = "0.5", features = ["cors"] }
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-tracing = "0.1.44"
+# tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+# tracing = "0.1.44"

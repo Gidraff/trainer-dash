@@ -1,17 +1,10 @@
 use axum::http::{Method, header};
-use axum::{
-    Router,
-    routing::{get, post},
-};
+use axum::{Router, routing::{get, post, put, delete}};
 use sqlx::PgPool;
 use std::env;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use std::net::SocketAddr;
-
-// These imports are required for the tracing macros to work
-use tracing::{info, warn, error}; 
-use tracing_subscriber;
 
 mod auth;
 mod db;
@@ -26,116 +19,132 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() {
-    // 1. Load environment variables
-    dotenvy::dotenv().ok();
-
-    // 2. Initialize Logging (Highest Priority)
-    tracing_subscriber::fmt()
-        .with_env_filter(env::var("RUST_LOG").unwrap_or_else(|_| "info".into()))
-        .init();
-
-    info!("Initializing FitFlow API...");
-
-    // 3. Database Setup with Retry Loop
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    // FORCE STDOUT FLUSH - This WILL show up in logs
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
     
+    eprintln!("=== FITFLOW API STARTING ===");
+    println!("=== FITFLOW API STARTING ===");
+    
+    dotenvy::dotenv().ok();
+    
+    // Check env vars
+    eprintln!("Checking DATABASE_URL...");
+    let database_url = match env::var("DATABASE_URL") {
+        Ok(url) => {
+            eprintln!("✓ DATABASE_URL found");
+            url
+        },
+        Err(_) => {
+            eprintln!("❌ DATABASE_URL missing!");
+            std::process::exit(1);
+        }
+    };
+    
+    eprintln!("Checking KEYCLOAK_INTERNAL_URL...");
+    let internal_url = match env::var("KEYCLOAK_INTERNAL_URL") {
+        Ok(url) => {
+            eprintln!("✓ KEYCLOAK_INTERNAL_URL: {}", url);
+            url
+        },
+        Err(_) => {
+            eprintln!("❌ KEYCLOAK_INTERNAL_URL missing!");
+            std::process::exit(1);
+        }
+    };
+    
+    let issuer_url = env::var("KEYCLOAK_ISSUER_URL")
+        .unwrap_or_else(|_| internal_url.clone());
+    
+    eprintln!("Connecting to database...");
+    
+    // Database with retry
     let pool = loop {
-        info!("Connecting to database...");
         match sqlx::PgPool::connect(&database_url).await {
             Ok(p) => {
-                info!("✅ Database connection established");
+                eprintln!("✅ Database connected!");
                 break p;
             },
             Err(e) => {
-                warn!("Waiting for DB... (Error: {}). Retrying in 2s...", e);
+                eprintln!("DB error: {}. Retrying...", e);
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             }
         }
     };
-
-    // Run migrations
-    sqlx::migrate!()
-        .run(&pool)
-        .await
-        .expect("Failed to run database migrations");
-
-    // 4. Keycloak Setup
-    let issuer_url = env::var("KEYCLOAK_ISSUER_URL")
-        .expect("KEYCLOAK_ISSUER_URL must be set");
-
-    let internal_url = env::var("KEYCLOAK_INTERNAL_URL")
-        .unwrap_or_else(|_| "http://keycloak:8080/auth/realms/trainer-app".to_string());
-
+    
+    eprintln!("Running migrations...");
+    sqlx::migrate!().run(&pool).await
+        .expect("Migrations failed");
+    eprintln!("✅ Migrations complete");
+    
+    // Keycloak
     let jwks_url = format!("{}/protocol/openid-connect/certs", internal_url);
-    info!("🔐 Fetching JWKS from: {}", jwks_url);
-
-    let response = reqwest::get(&jwks_url)
-        .await
-        .expect("CRITICAL: Failed to connect to Keycloak.");
-
-    let body_text = response
-        .text()
-        .await
-        .expect("Failed to read Keycloak response body");
-
-    if body_text.contains("<html>") || body_text.contains("Page not found") {
-        error!("Keycloak returned HTML instead of JSON. Check realm configuration.");
-        panic!("Keycloak config error. See logs.");
+    eprintln!("Fetching JWKS from: {}", jwks_url);
+    
+    let body_text = reqwest::get(&jwks_url).await
+        .expect("Failed to connect to Keycloak")
+        .text().await
+        .expect("Failed to read response");
+    
+    if body_text.contains("<html>") {
+        eprintln!("❌ Keycloak returned HTML!");
+        std::process::exit(1);
     }
-
+    
     let jwks: auth::jwks::Jwks = serde_json::from_str(&body_text)
-        .expect("Failed to parse JWKS JSON.");
-
+        .expect("Failed to parse JWKS");
+    eprintln!("✅ JWKS loaded");
+    
     let auth_config = auth::middleware::AuthState {
         jwks: Arc::new(jwks),
         issuer: issuer_url,
         audience: "trainer-api".into(),
     };
-
+    
     let state = AppState {
         db: pool.clone(),
         auth: auth_config.clone(),
     };
-
-    // 5. Routes & Middleware
+    
+    // Routes
     let protected_routes = Router::new()
-        .route("/trainer/secure", get(|| async { "Secure content" }))
-        // ... include your other trainer routes here
+        .route("/trainer/secure", get(|| async { "Secure" }))
+        .route("/trainer/clients", post(handlers::trainer::create_client))
+        .route("/trainer/clients", get(handlers::trainer::list_clients))
+        .route("/trainer/clients/:id", get(handlers::trainer::get_client_by_id))
+        .route("/trainer/clients/:id", put(handlers::trainer::update_client))
+        .route("/trainer/clients/:id", delete(handlers::trainer::delete_client))
+        .route("/trainer/sessions/:client_id", get(handlers::trainer::get_client_sessions))
+        .route("/trainer/sessions/:client_id", post(handlers::trainer::log_workout_session))
+        .route("/trainer/sessions/:id/feedback", post(handlers::trainer::add_session_feedback))
         .layer(axum::middleware::from_fn_with_state(
             auth_config,
             auth::middleware::auth_middleware,
         ));
-
+    
     let public_routes = Router::new()
-        .route("/", get(|| async { "FitFlow AI API - v1.0" }))
+        .route("/", get(|| async { "FitFlow API v1.0" }))
         .route("/health", get(|| async { "OK" }));
-
+    
     let cors = CorsLayer::new()
         .allow_origin("http://localhost:5173".parse::<axum::http::HeaderValue>().unwrap())
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
         .allow_credentials(true);
-
+    
     let app = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .layer(cors)
         .with_state(state);
-
-    // 6. Server Start
-    let host = env::var("APP_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
-    let port = env::var("APP_PORT").unwrap_or_else(|_| "8080".to_string())
-        .parse::<u16>()
-        .expect("APP_PORT must be a valid u16");
-
-    let addr: SocketAddr = format!("{}:{}", host, port)
-        .parse()
-        .expect("Failed to parse socket address");
-
-    info!("🚀 Server starting at http://{}", addr);
-
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     
-    // In Axum 0.7, you don't need into_make_service() anymore
+    let addr: SocketAddr = "0.0.0.0:8080".parse().unwrap();
+    eprintln!("🚀 Binding to {}", addr);
+    
+    let listener = tokio::net::TcpListener::bind(addr).await
+        .expect("Failed to bind");
+    
+    eprintln!("✅ Server ready!");
+    
     axum::serve(listener, app).await.unwrap();
 }
