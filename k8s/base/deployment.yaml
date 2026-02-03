@@ -37,11 +37,24 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
+              # 1. Build the URL
               export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@127.0.0.1:5432/${DB_NAME}"
+              
+              # 2. Print for Debugging
               echo "=== FitFlow API Starting ==="
               echo "DATABASE_URL: postgresql://${DB_USER}:***@127.0.0.1:5432/${DB_NAME}"
-              exec $(find / -name "api" -type f)
-              exec /usr/local/bin/api
+              
+              # 3. Find the binary and EXECUTE it
+              # We search for the file named 'api' that is executable
+              BINARY_PATH=$(find / -name "api" -type f -executable | head -n 1)
+              
+              if [ -z "$BINARY_PATH" ]; then
+                echo "❌ ERROR: Binary 'api' not found anywhere in the image!"
+                exit 1
+              fi
+              
+              echo "🚀 Found binary at: $BINARY_PATH. Starting now..."
+              exec "$BINARY_PATH"
 
           env:
             - name: KEYCLOAK_ISSUER_URL
