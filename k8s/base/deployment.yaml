@@ -4,7 +4,7 @@ metadata:
   name: fitflow-api
   namespace: default
 spec:
-  replicas: 1 # Start with just 1 for debugging
+  replicas: 1
   selector:
     matchLabels:
       app: fitflow-api
@@ -14,6 +14,7 @@ spec:
         app: fitflow-api
     spec:
       containers:
+        # Sidecar: Cloud SQL Proxy
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
           args:
@@ -23,27 +24,43 @@ spec:
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
-              memory: "128Mi"
-              cpu: "100m"
+        
+        # Primary Container: API with Diagnostic Script
         - name: api
           image: us-central1-docker.pkg.dev/gidraff-cloudkite-58sdk3/fitflow/api:latest
           command: ["/bin/sh", "-c"]
           args:
             - |
-              echo "=== Container Starting ==="
+              echo "=== DIAGNOSTIC MODE ==="
               echo "PWD: $(pwd)"
-              echo "Binary exists: $(ls -la ./trainer-api 2>&1)"
-              echo "Running binary..."
-              exec ./trainer-api
-
-          ports:
-            - containerPort: 8080
-
+              echo ""
+              
+              echo "Binary info:"
+              ls -la ./trainer-api || echo "Binary ./trainer-api NOT FOUND in $(pwd)"
+              echo ""
+              
+              echo "Checking binary type:"
+              file ./trainer-api || echo "file command failed"
+              echo ""
+              
+              echo "Checking shared library dependencies:"
+              ldd ./trainer-api || echo "ldd failed - likely missing glibc or wrong architecture!"
+              echo ""
+              
+              echo "Environment variables check:"
+              env | grep -E "DATABASE_URL|KEYCLOAK" || echo "No DB/Keycloak vars set in shell!"
+              echo ""
+              
+              echo "Attempting to run binary..."
+              ./trainer-api 2>&1 || {
+                EXIT_CODE=$?
+                echo "❌ Binary exited with code: $EXIT_CODE"
+                echo ""
+                echo "Checking for missing libraries (detailed):"
+                ldd ./trainer-api | grep "not found" || echo "All libraries found (if ldd worked)"
+                exit 1
+              }
+          
           env:
             - name: KEYCLOAK_ISSUER_URL
               value: "https://auth.cordiafit.fit/auth/realms/trainer-app"
@@ -71,13 +88,5 @@ spec:
                   name: fitflow-db-secrets
                   key: database
             - name: DATABASE_URL
-              value: "postgresql://$(DB_USER):$(DB_PASS)@127.0.0.1:5432/fitflow_db"
-
-            # NO PROBES - Let it crash and show logs
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "100m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
+              value: "postgresql://$(DB_USER):$(DB_PASS)@127.0.0.1:5432/$(DB_NAME)"
+            # resources:
