@@ -4,7 +4,7 @@ metadata:
   name: fitflow-api
   namespace: default
 spec:
-  replicas: 2
+  replicas: 1 # Start with just 1 for debugging
   selector:
     matchLabels:
       app: fitflow-api
@@ -14,7 +14,6 @@ spec:
         app: fitflow-api
     spec:
       containers:
-        # Cloud SQL Proxy - Must be first so it's ready when API starts
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
           args:
@@ -27,44 +26,35 @@ spec:
           resources:
             requests:
               memory: "64Mi"
-              cpu: "20m"
+              cpu: "50m"
             limits:
-              memory: "256Mi"
-              cpu: "200m"
-
-        # API container
+              memory: "128Mi"
+              cpu: "100m"
         - name: api
-          image: fitflow-api:placeholder
+          image: us-central1-docker.pkg.dev/gidraff-cloudkite-58sdk3/fitflow/api:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "=== Container Starting ==="
+              echo "PWD: $(pwd)"
+              echo "Binary exists: $(ls -la ./trainer-api 2>&1)"
+              echo "Running binary..."
+              exec ./trainer-api
+
           ports:
             - containerPort: 8080
-              name: http
 
           env:
             - name: KEYCLOAK_ISSUER_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: fitflow-api-config
-                  key: KEYCLOAK_ISSUER_URL
+              value: "https://auth.cordiafit.fit/auth/realms/trainer-app"
             - name: KEYCLOAK_INTERNAL_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: fitflow-api-config
-                  key: KEYCLOAK_INTERNAL_URL
+              value: "http://keycloak-v2.keycloak.svc.cluster.local:8080/auth/realms/trainer-app"
             - name: RUST_LOG
-              valueFrom:
-                configMapKeyRef:
-                  name: fitflow-api-config
-                  key: RUST_LOG
+              value: "debug"
             - name: APP_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: fitflow-api-config
-                  key: APP_HOST
+              value: "0.0.0.0"
             - name: APP_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: fitflow-api-config
-                  key: APP_PORT
+              value: "8080"
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
@@ -81,44 +71,9 @@ spec:
                   name: fitflow-db-secrets
                   key: database
             - name: DATABASE_URL
-              value: "postgresql://$(DB_USER):$(DB_PASS)@127.0.0.1:5432/$(DB_NAME)"
+              value: "postgresql://$(DB_USER):$(DB_PASS)@127.0.0.1:5432/fitflow_db"
 
-          # CRITICAL: Startup probe prevents liveness/readiness from running too early
-          startupProbe:
-            httpGet:
-              path: /health
-              port: 8080
-              scheme: HTTP
-            initialDelaySeconds: 10
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 24 # 24 * 5s = 120s max startup time
-            successThreshold: 1
-
-          # Only runs AFTER startup probe succeeds
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-              scheme: HTTP
-            initialDelaySeconds: 0 # Not needed, startup probe handles this
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-            successThreshold: 1
-
-          # Only runs AFTER startup probe succeeds
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-              scheme: HTTP
-            initialDelaySeconds: 0 # Not needed, startup probe handles this
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
-            successThreshold: 1
-
+            # NO PROBES - Let it crash and show logs
           resources:
             requests:
               memory: "256Mi"
