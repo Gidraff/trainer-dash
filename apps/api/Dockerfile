@@ -23,8 +23,8 @@ RUN apt-get update && apt-get install -y libssl3 ca-certificates && rm -rf /var/
 
 WORKDIR /app
 # Ensure 'api' matches the name in your Cargo.toml [package] section
-COPY --from=builder /app/target/release/api ./trainer-api
+COPY --from=builder /app/target/release/api ./api
 
 EXPOSE 8080
 # Use the correct binary name
-CMD ["./trainer-api"]
+CMD ["./api"]
