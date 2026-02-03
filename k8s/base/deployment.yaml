@@ -14,7 +14,6 @@ spec:
         app: fitflow-api
     spec:
       containers:
-        # Sidecar: Cloud SQL Proxy
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
           args:
@@ -24,43 +23,25 @@ spec:
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
-        
-        # Primary Container: API with Diagnostic Script
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "20m"
+
         - name: api
           image: us-central1-docker.pkg.dev/gidraff-cloudkite-58sdk3/fitflow/api:latest
+          ports:
+            - containerPort: 8080
+
+          # CRITICAL FIX: Build DATABASE_URL in the shell, not in env
           command: ["/bin/sh", "-c"]
           args:
             - |
-              echo "=== DIAGNOSTIC MODE ==="
-              echo "PWD: $(pwd)"
-              echo ""
-              
-              echo "Binary info:"
-              ls -la ./trainer-api || echo "Binary ./trainer-api NOT FOUND in $(pwd)"
-              echo ""
-              
-              echo "Checking binary type:"
-              file ./trainer-api || echo "file command failed"
-              echo ""
-              
-              echo "Checking shared library dependencies:"
-              ldd ./trainer-api || echo "ldd failed - likely missing glibc or wrong architecture!"
-              echo ""
-              
-              echo "Environment variables check:"
-              env | grep -E "DATABASE_URL|KEYCLOAK" || echo "No DB/Keycloak vars set in shell!"
-              echo ""
-              
-              echo "Attempting to run binary..."
-              ./trainer-api 2>&1 || {
-                EXIT_CODE=$?
-                echo "❌ Binary exited with code: $EXIT_CODE"
-                echo ""
-                echo "Checking for missing libraries (detailed):"
-                ldd ./trainer-api | grep "not found" || echo "All libraries found (if ldd worked)"
-                exit 1
-              }
-          
+              export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@127.0.0.1:5432/${DB_NAME}"
+              echo "=== FitFlow API Starting ==="
+              echo "DATABASE_URL: postgresql://${DB_USER}:***@127.0.0.1:5432/${DB_NAME}"
+              exec ./api
+
           env:
             - name: KEYCLOAK_ISSUER_URL
               value: "https://auth.cordiafit.fit/auth/realms/trainer-app"
@@ -87,6 +68,33 @@ spec:
                 secretKeyRef:
                   name: fitflow-db-secrets
                   key: database
-            - name: DATABASE_URL
-              value: "postgresql://$(DB_USER):$(DB_PASS)@127.0.0.1:5432/$(DB_NAME)"
-            # resources:
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            failureThreshold: 30
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
